@@ -195,6 +195,11 @@
             content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 2; opacity: .18; mix-blend-mode: overlay;
             background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .9 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
         }
+        .disc-tag { position: absolute; top: .15rem; right: .15rem; z-index: 4; width: 3rem; pointer-events: none; filter: drop-shadow(0 2px 4px rgba(0,0,0,.55)); }
+        .disc-tag svg { display: block; width: 100%; height: auto; }
+        @media (min-width: 640px) { .disc-tag { width: 3.8rem; top: .3rem; right: .3rem; } }
+        #modal-image-wrapper .disc-tag { width: 4.2rem; }
+        .price-old { color: #8b8b93; font-weight: 400; font-size: .72em; margin-right: .4rem; text-decoration: line-through; text-decoration-thickness: 1.5px; }
         .card-no { position: absolute; left: .5rem; bottom: .4rem; z-index: 3; font-family: 'Orbitron', sans-serif; font-style: italic; font-weight: 700; font-size: .8rem; line-height: 1; color: rgba(255,255,255,.75); text-shadow: 0 1px 8px rgba(0,0,0,.8); }
         @media (hover: hover) {
             .glass-card:hover .photo-alt { opacity: 1; }
@@ -1281,11 +1286,15 @@
             const isJoyita = typeof raw.isJoyita === 'boolean' ? raw.isJoyita : isTruthy(raw.isJoyita ?? raw.joyita);
             const svgType = clean(raw.svgType || raw.svg) || 'hoodie-gothic-butterfly';
             const tag = clean(raw.tag) || (isJoyita ? 'JOYITA 1 OF 1' : 'DISPONIBLE');
+            const basePrice = Number(String(raw.price ?? raw.precio ?? '0').replace(/[^\d]/g, '')) || 0;
+            const discount = Math.min(90, Math.max(0, Math.round(parseFloat(String(raw.discount ?? raw.descuento ?? raw.oferta ?? '').replace(',', '.').replace(/[^\d.]/g, '')) || 0)));
             return {
                 id: Number(raw.id),
                 name: clean(raw.name || raw.nombre) || 'Prenda sin nombre',
                 category: normCategory(clean(raw.category || raw.categoria)),
-                price: Number(String(raw.price ?? raw.precio ?? '0').replace(/[^\d]/g, '')) || 0,
+                price: discount ? Math.round(basePrice * (1 - discount / 100)) : basePrice,
+                oldPrice: discount ? basePrice : 0,
+                discount,
                 tag,
                 badgeColor: badgeFor(tag, isJoyita, estado),
                 sizes: splitList(raw.sizes ?? raw.talles).length ? splitList(raw.sizes ?? raw.talles) : ['Único'],
@@ -1402,9 +1411,22 @@
             imgEl.remove();
         }
 
+        // Etiqueta de descuento (arriba a la derecha de la prenda)
+        function discountTag(product) {
+            if (!product.discount || product.estado === 'vendida') return '';
+            return `<div class="disc-tag" aria-label="${product.discount}% de descuento"><svg viewBox="0 -8 80 104" aria-hidden="true" focusable="false"><g transform="rotate(14 40 50)"><path d="M40 21 C40 2 62 0 60 17" fill="none" stroke="#3d5a5a" stroke-width="4.5" stroke-linecap="round"/><path d="M18 24 L40 10 L62 24 V90 H18 Z" fill="#9ddc2a"/><circle cx="40" cy="22" r="6" fill="#ff9a1f"/><circle cx="40" cy="22" r="2.6" fill="#3d5a5a"/><text x="40" y="62" text-anchor="middle" font-family="Plus Jakarta Sans, sans-serif" font-weight="800" font-size="${String(product.discount).length > 2 ? 15 : 18}" fill="#14210a">-${product.discount}%</text></g></svg></div>`;
+        }
+
+        // Precio con el anterior tachado cuando hay descuento
+        function priceHTML(p) {
+            const cur = '$' + p.price.toLocaleString('es-AR');
+            return p.oldPrice ? `<s class="price-old">$${p.oldPrice.toLocaleString('es-AR')}</s>${cur}` : cur;
+        }
+
         function soldOverlay(product) {
-            if (product.estado === 'disponible') return '';
-            return `<div class="sold-overlay"><span>${product.estado === 'vendida' ? 'Vendida' : 'Reservada'}</span></div>`;
+            const tag = discountTag(product);
+            if (product.estado === 'disponible') return tag;
+            return tag + `<div class="sold-overlay"><span>${product.estado === 'vendida' ? 'Vendida' : 'Reservada'}</span></div>`;
         }
 
         // Garment SVG Vector Generator Function (Scaled down for smaller 2-col mobile cards)
@@ -1780,7 +1802,7 @@
 
                         <div class="flex items-center justify-between pt-2 sm:pt-3 border-t border-white/10 mt-1 sm:mt-2">
                             <span class="font-mono font-bold text-xs sm:text-base text-amber-300">
-                                $${product.price.toLocaleString('es-AR')}
+                                ${priceHTML(product)}
                             </span>
                             <button onclick="addToCart(${product.id})" ${product.isDisponible ? '' : 'disabled'} aria-label="Añadir al carrito" class="tap bg-amber-400 text-black hover:bg-amber-300 p-2.5 rounded-full transition-all active:scale-95 shadow-md font-bold disabled:opacity-30 disabled:pointer-events-none" title="${product.isDisponible ? 'Añadir al Carrito' : 'No disponible'}">
                                 <i data-lucide="plus" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
@@ -1865,7 +1887,7 @@
 
                         <div class="flex items-center justify-between pt-2 sm:pt-3 border-t border-white/5 mt-1 sm:mt-2">
                             <span class="font-mono font-bold text-xs sm:text-base text-amber-300">
-                                $${product.price.toLocaleString('es-AR')}
+                                ${priceHTML(product)}
                             </span>
                             <button onclick="addToCart(${product.id})" ${product.isDisponible ? '' : 'disabled'} aria-label="Añadir al carrito" class="tap bg-white text-black hover:bg-gray-200 p-2.5 rounded-full transition-all active:scale-95 shadow-md disabled:opacity-30 disabled:pointer-events-none" title="${product.isDisponible ? 'Añadir al Carrito' : 'No disponible'}">
                                 <i data-lucide="plus" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
@@ -2137,7 +2159,7 @@
 
             document.getElementById('modal-title').textContent = product.name;
             document.getElementById('modal-category').textContent = product.category;
-            document.getElementById('modal-price').textContent = `$${product.price.toLocaleString('es-AR')} ARS`;
+            document.getElementById('modal-price').innerHTML = priceHTML(product) + ' ARS';
             document.getElementById('modal-description').textContent = product.description;
             gallery = { product, index: 0 };
             renderModalGallery();
@@ -2161,7 +2183,7 @@
                 toggleCart(true);
             };
 
-            const waText = encodeURIComponent(`Hola Ether Vintage! Quisiera consultar disponibilidad de: ${product.name} ($${product.price.toLocaleString('es-AR')} ARS)`);
+            const waText = encodeURIComponent(`Hola Ether Vintage! Quisiera consultar disponibilidad de: ${product.name} ($${product.price.toLocaleString('es-AR')} ARS${product.discount ? ', ' + product.discount + '% de descuento' : ''})`);
             document.getElementById('modal-wa-btn').href = `https://wa.me/5492964658063?text=${waText}`;
 
             productModal.classList.remove('opacity-0', 'pointer-events-none');
